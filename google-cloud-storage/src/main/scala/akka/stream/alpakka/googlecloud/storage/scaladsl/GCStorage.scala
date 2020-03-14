@@ -174,8 +174,10 @@ object GCStorage {
    * @return  The source will emit an empty [[scala.Option Option]] if an object can not be found.
    *         Otherwise [[scala.Option Option]] will contain a source of object's data.
    */
-  def download(bucket: String, objectName: String): Source[Option[Source[ByteString, NotUsed]], NotUsed] =
-    GCStorageStream.download(bucket, objectName)
+  def download(bucket: String,
+               objectName: String,
+               customerEncryptionKey: Option[String]): Source[Option[Source[ByteString, NotUsed]], NotUsed] =
+    GCStorageStream.download(bucket, objectName, customerEncryptionKey = customerEncryptionKey)
 
   /**
    * Downloads object from bucket.
@@ -190,8 +192,9 @@ object GCStorage {
    */
   def download(bucket: String,
                objectName: String,
-               generation: Option[Long]): Source[Option[Source[ByteString, NotUsed]], NotUsed] =
-    GCStorageStream.download(bucket, objectName, generation)
+               generation: Option[Long],
+               customerEncryptionKey: Option[String]): Source[Option[Source[ByteString, NotUsed]], NotUsed] =
+    GCStorageStream.download(bucket, objectName, generation, customerEncryptionKey = customerEncryptionKey)
 
   /**
    * Uploads object, use this for small files and `resumableUpload` for big ones
@@ -207,8 +210,10 @@ object GCStorage {
   def simpleUpload(bucket: String,
                    objectName: String,
                    data: Source[ByteString, _],
-                   contentType: ContentType): Source[StorageObject, NotUsed] =
-    GCStorageStream.putObject(bucket, objectName, data, contentType)
+                   contentType: ContentType,
+                   customerEncryptionKey: Option[String] = None,
+                   predefinedAcl: Option[String] = None): Source[StorageObject, NotUsed] =
+    GCStorageStream.putObject(bucket, objectName, data, contentType, customerEncryptionKey, predefinedAcl)
 
   /**
    * Uploads object by making multiple requests
