@@ -29,7 +29,6 @@ import scala.util.control.NonFatal
 
 @InternalApi private[storage] object GCStorageStream {
   private val parallelism = 1
-  private val sha256md = java.security.MessageDigest.getInstance("SHA-256")
   private val base64Encoder = Base64.getEncoder()
   private val base64Decoder = Base64.getDecoder()
 
@@ -690,6 +689,6 @@ import scala.util.control.NonFatal
   }
 
   private def getSha256(input: Array[Byte]): String = {
-    base64Encoder.encodeToString(sha256md.digest(input))
+    base64Encoder.encodeToString(java.security.MessageDigest.getInstance("SHA-256").digest(input))
   }
 }
