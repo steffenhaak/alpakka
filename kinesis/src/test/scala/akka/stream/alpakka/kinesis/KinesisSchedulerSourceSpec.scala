@@ -11,8 +11,10 @@ import java.util.concurrent.Semaphore
 import akka.stream.KillSwitches
 import akka.stream.alpakka.kinesis.CommittableRecord.{BatchData, ShardProcessorData}
 import akka.stream.alpakka.kinesis.KinesisSchedulerErrors.SchedulerUnexpectedShutdown
+import akka.stream.alpakka.kinesis.SwitchMode.{Close, Open}
 import akka.stream.alpakka.kinesis.impl.ShardProcessor
 import akka.stream.alpakka.kinesis.scaladsl.KinesisSchedulerSource
+import akka.stream.alpakka.testkit.scaladsl.Repeated
 import akka.stream.scaladsl.Keep
 import akka.stream.testkit.scaladsl.StreamTestKit.assertAllStagesStopped
 import akka.stream.testkit.scaladsl.{TestSink, TestSource}
@@ -40,7 +42,12 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Random
 
-class KinesisSchedulerSourceSpec extends AnyWordSpec with Matchers with DefaultTestContext with Eventually {
+class KinesisSchedulerSourceSpec
+    extends AnyWordSpec
+    with Matchers
+    with DefaultTestContext
+    with Eventually
+    with Repeated {
 
   "KinesisSchedulerSource" must {
 
@@ -60,6 +67,37 @@ class KinesisSchedulerSourceSpec extends AnyWordSpec with Matchers with DefaultT
 
       sinkProbe.expectComplete()
     })
+
+    "publish records downstream with backpressure" in assertAllStagesStopped(
+      new KinesisSchedulerContext(bufferSize = 50, switchMode = Close) with TestData {
+        recordProcessor.initialize(randomInitializationInput())
+
+        private val allRecordsConsumedBySource = Future {
+          for (_ <- 1 to 52) recordProcessor.processRecords(sampleRecordsInput())
+        }
+
+        Thread.sleep(100)
+
+        // If the bufferSize is 50, only 51 records can be consumed by the Source
+        // 50 -> The buffer of the main stage of the Source
+        // 1 -> Other components of the Source take additional records, this number is affected by the config:
+        //      akka.stream.materializer.initial-input-buffer-size
+        //      akka.stream.materializer.max-input-buffer-size
+        allRecordsConsumedBySource.isCompleted shouldBe false
+
+        // We make room so more records are consumed/buffered along the stream
+        valve.foreach(_.flip(Open))
+
+        // All the 52 records can be consumed by the Source now
+        eventually {
+          allRecordsConsumedBySource.isCompleted shouldBe true
+        }
+
+        for (_ <- 1 to 52) sinkProbe.requestNext()
+        killSwitch.shutdown()
+        sinkProbe.expectComplete()
+      }
+    )
 
     "publish records downstream using different IRecordProcessor incarnations" in assertAllStagesStopped(
       new KinesisSchedulerContext with TestData {
@@ -175,38 +213,36 @@ class KinesisSchedulerSourceSpec extends AnyWordSpec with Matchers with DefaultT
     "not drop messages in case of Shard end" in assertAllStagesStopped(
       new KinesisSchedulerContext(bufferSize = 10) with TestData {
         recordProcessor.initialize(randomInitializationInput())
-        Future {
-          val records: Seq[KinesisClientRecord] = (1 to 30).map { i =>
-            val record = org.mockito.Mockito.mock(classOf[KinesisClientRecord])
-            when(record.sequenceNumber).thenReturn(i.toString)
-            record
-          }
-          recordProcessor.processRecords(sampleRecordsInput(records, isShardEnd = true))
-        }
-
         val shardEndedCheckpointer: RecordProcessorCheckpointer =
           org.mockito.Mockito.mock(classOf[software.amazon.kinesis.processor.RecordProcessorCheckpointer])
-        Future {
-          val shardEndedInput = org.mockito.Mockito.mock(classOf[ShardEndedInput])
-          when(shardEndedInput.checkpointer()).thenReturn(shardEndedCheckpointer)
-          recordProcessor.shardEnded(shardEndedInput)
-        }
 
-        Thread.sleep(100)
+        val shardEndedCallFinished = for {
+          _ <- Future {
+            val records: Seq[KinesisClientRecord] = (1 to 30).map { i =>
+              val record = org.mockito.Mockito.mock(classOf[KinesisClientRecord])
+              when(record.sequenceNumber).thenReturn(i.toString)
+              record
+            }
+            recordProcessor.processRecords(sampleRecordsInput(records, isShardEnd = true))
+          }
+          _ <- Future {
+            val shardEndedInput = org.mockito.Mockito.mock(classOf[ShardEndedInput])
+            when(shardEndedInput.checkpointer()).thenReturn(shardEndedCheckpointer)
+            recordProcessor.shardEnded(shardEndedInput)
+          }
+        } yield ()
+
         verify(shardEndedCheckpointer, never()).checkpoint()
 
-        for (_ <- 1 to 29) {
-          sinkProbe.requestNext()
-          Thread.sleep(100)
-        }
+        for (_ <- 1 to 29) sinkProbe.requestNext()
 
-        Thread.sleep(100)
         verify(shardEndedCheckpointer, never()).checkpoint()
 
         sinkProbe.requestNext().tryToCheckpoint()
 
         eventually {
           verify(shardEndedCheckpointer).checkpoint()
+          shardEndedCallFinished.isCompleted shouldBe true
         }
 
         killSwitch.shutdown()
@@ -217,8 +253,8 @@ class KinesisSchedulerSourceSpec extends AnyWordSpec with Matchers with DefaultT
 
   private abstract class KinesisSchedulerContext(schedulerFailure: Option[Throwable] = None,
                                                  bufferSize: Int = 100,
-                                                 backpressureTimeout: FiniteDuration = 1.minute) {
-
+                                                 backpressureTimeout: FiniteDuration = 1.minute,
+                                                 switchMode: SwitchMode = Open) {
     val scheduler: Scheduler = org.mockito.Mockito.mock(classOf[Scheduler])
 
     val lock = new Semaphore(0)
@@ -237,11 +273,12 @@ class KinesisSchedulerSourceSpec extends AnyWordSpec with Matchers with DefaultT
       semaphore.release()
       scheduler
     }
-    val ((killSwitch, watch), sinkProbe) =
+    val (((valve, killSwitch), watch), sinkProbe) =
       KinesisSchedulerSource(schedulerBuilder,
                              KinesisSchedulerSourceSettings(bufferSize = bufferSize,
                                                             backpressureTimeout = backpressureTimeout))
-        .viaMat(KillSwitches.single)(Keep.right)
+        .viaMat(Valve(switchMode))(Keep.right)
+        .viaMat(KillSwitches.single)(Keep.both)
         .watchTermination()(Keep.both)
         .toMat(TestSink.probe)(Keep.both)
         .run()
@@ -294,33 +331,36 @@ class KinesisSchedulerSourceSpec extends AnyWordSpec with Matchers with DefaultT
       val checkpointer: KinesisClientRecord => Unit =
         org.mockito.Mockito.mock(classOf[KinesisClientRecord => Unit])
       var latestRecord: KinesisClientRecord = _
-      for (i <- 1 to 3) {
-        val record = org.mockito.Mockito.mock(classOf[KinesisClientRecord])
-        when(record.sequenceNumber).thenReturn("1")
-        when(record.subSequenceNumber).thenReturn(i.toLong)
-        sourceProbe.sendNext(
-          new CommittableRecord(
-            record,
-            new BatchData(null, null, false, 0),
-            new ShardProcessorData(
-              "shard-1",
-              null,
-              null
-            )
-          ) {
-            override def shutdownReason: Option[ShutdownReason] = None
-            override def forceCheckpoint(): Unit = checkpointer(record)
-          }
-        )
-        latestRecord = record
+      val allRecordsPushed: Future[Unit] = Future {
+        for (i <- 1 to 3) {
+          val record = org.mockito.Mockito.mock(classOf[KinesisClientRecord])
+          when(record.sequenceNumber).thenReturn("1")
+          when(record.subSequenceNumber).thenReturn(i.toLong)
+          sourceProbe.sendNext(
+            new CommittableRecord(
+              record,
+              new BatchData(null, null, false, 0),
+              new ShardProcessorData(
+                "shard-1",
+                null,
+                null
+              )
+            ) {
+              override def shutdownReason: Option[ShutdownReason] = None
+
+              override def forceCheckpoint(): Unit = checkpointer(record)
+            }
+          )
+          latestRecord = record
+        }
       }
 
       for (_ <- 1 to 3) sinkProbe.requestNext()
 
-      eventually(
-        verify(checkpointer)
-          .apply(latestRecord)
-      )
+      eventually {
+        allRecordsPushed.isCompleted shouldBe true
+        verify(checkpointer).apply(latestRecord)
+      }
 
       sourceProbe.sendComplete()
       sinkProbe.expectComplete()
@@ -330,55 +370,59 @@ class KinesisSchedulerSourceSpec extends AnyWordSpec with Matchers with DefaultT
       val checkpointerShard1: KinesisClientRecord => Unit =
         org.mockito.Mockito.mock(classOf[KinesisClientRecord => Unit])
       var latestRecordShard1: KinesisClientRecord = _
-      for (i <- 1 to 3) {
-        val record = org.mockito.Mockito.mock(classOf[KinesisClientRecord])
-        when(record.sequenceNumber).thenReturn(i.toString)
-        sourceProbe.sendNext(
-          new CommittableRecord(
-            record,
-            new BatchData(null, null, false, 0),
-            new ShardProcessorData(
-              "shard-1",
-              null,
-              null
-            )
-          ) {
-            override def shutdownReason: Option[ShutdownReason] = None
-            override def forceCheckpoint(): Unit = checkpointerShard1(record)
-          }
-        )
-        latestRecordShard1 = record
-      }
+      var latestRecordShard2: KinesisClientRecord = _
       val checkpointerShard2: KinesisClientRecord => Unit =
         org.mockito.Mockito.mock(classOf[KinesisClientRecord => Unit])
-      var latestRecordShard2: KinesisClientRecord = _
-      for (i <- 1 to 3) {
-        val record = org.mockito.Mockito.mock(classOf[KinesisClientRecord])
-        when(record.sequenceNumber).thenReturn(i.toString)
-        sourceProbe.sendNext(
-          new CommittableRecord(
-            record,
-            new BatchData(null, null, false, 0),
-            new ShardProcessorData(
-              "shard-2",
-              null,
-              null
-            )
-          ) {
-            override def shutdownReason: Option[ShutdownReason] = None
-            override def forceCheckpoint(): Unit = checkpointerShard2(record)
-          }
-        )
-        latestRecordShard2 = record
+
+      val allRecordsPushed: Future[Unit] = Future {
+        for (i <- 1 to 3) {
+          val record = org.mockito.Mockito.mock(classOf[KinesisClientRecord])
+          when(record.sequenceNumber).thenReturn(i.toString)
+          sourceProbe.sendNext(
+            new CommittableRecord(
+              record,
+              new BatchData(null, null, false, 0),
+              new ShardProcessorData(
+                "shard-1",
+                null,
+                null
+              )
+            ) {
+              override def shutdownReason: Option[ShutdownReason] = None
+
+              override def forceCheckpoint(): Unit = checkpointerShard1(record)
+            }
+          )
+          latestRecordShard1 = record
+        }
+        for (i <- 1 to 3) {
+          val record = org.mockito.Mockito.mock(classOf[KinesisClientRecord])
+          when(record.sequenceNumber).thenReturn(i.toString)
+          sourceProbe.sendNext(
+            new CommittableRecord(
+              record,
+              new BatchData(null, null, false, 0),
+              new ShardProcessorData(
+                "shard-2",
+                null,
+                null
+              )
+            ) {
+              override def shutdownReason: Option[ShutdownReason] = None
+
+              override def forceCheckpoint(): Unit = checkpointerShard2(record)
+            }
+          )
+          latestRecordShard2 = record
+        }
       }
 
       for (_ <- 1 to 6) sinkProbe.requestNext()
 
       eventually {
-        verify(checkpointerShard1)
-          .apply(latestRecordShard1)
-        verify(checkpointerShard2)
-          .apply(latestRecordShard2)
+        allRecordsPushed.isCompleted shouldBe true
+        verify(checkpointerShard1).apply(latestRecordShard1)
+        verify(checkpointerShard2).apply(latestRecordShard2)
       }
 
       sourceProbe.sendComplete()

@@ -6,7 +6,7 @@ Google Cloud Pub/Sub provides many-to-many, asynchronous messaging that decouple
 Further information at the official [Google Cloud documentation website](https://cloud.google.com/pubsub/docs/overview).
 @@@
 
-This connector communicates to Pub/Sub via HTTP requests (i.e. https://pubsub.googleapis.com). For a connector that uses gRPC for the communication, take a look at the alternative @ref[Alpakka Google Cloud Pub/Sub gRPC](google-cloud-pub-sub-grpc.md) connector.
+This connector communicates to Pub/Sub via HTTP requests (i.e. `https://pubsub.googleapis.com`). For a connector that uses gRPC for the communication, take a look at the alternative @ref[Alpakka Google Cloud Pub/Sub gRPC](google-cloud-pub-sub-grpc.md) connector.
 
 @@project-info{ projectId="google-cloud-pub-sub" }
 
@@ -46,13 +46,13 @@ Scala
 Java
 : @@snip [snip](/google-cloud-pub-sub/src/test/java/docs/javadsl/ExampleUsageJava.java) { #init-credentials }
 
-And prepare the actor system and materializer.
+And prepare the actor system.
 
 Scala
-: @@snip [snip](/google-cloud-pub-sub/src/test/scala/docs/scaladsl/ExampleUsage.scala) { #init-mat }
+: @@snip [snip](/google-cloud-pub-sub/src/test/scala/docs/scaladsl/ExampleUsage.scala) { #init-system }
 
 Java
-: @@snip [snip](/google-cloud-pub-sub/src/test/java/docs/javadsl/ExampleUsageJava.java) { #init-mat }
+: @@snip [snip](/google-cloud-pub-sub/src/test/java/docs/javadsl/ExampleUsageJava.java) { #init-system }
 
 To publish a single request, build the message with a base64 data payload and put it in a @scaladoc[PublishRequest](akka.stream.alpakka.googlecloud.pubsub.PublishRequest). Publishing creates a flow taking the messages and returning the accepted message ids.
 

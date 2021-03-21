@@ -4,7 +4,7 @@
 
 Amazon Simple Queue Service (Amazon SQS) offers a secure, durable, and available hosted queue that lets you integrate and decouple distributed software systems and components. Amazon SQS offers common constructs such as dead-letter queues and cost allocation tags. It provides a generic web services API and it can be accessed by any programming language that the AWS SDK supports. 
 
-For more information about AWS SQS please visit the [official documentation](https://aws.amazon.com/documentation/sqs/).
+For more information about AWS SQS please visit the [official documentation](https://docs.aws.amazon.com/sqs/index.html).
 
 @@@
 
@@ -38,7 +38,7 @@ The table below shows direct dependencies of this module and the second tab show
 
 ## Setup
 
-Prepare an @apidoc[akka.actor.ActorSystem] and a @apidoc[Materializer].
+Prepare an @apidoc[akka.actor.ActorSystem].
 
 Scala
 : @@snip [snip](/sqs/src/test/scala/akka/stream/alpakka/sqs/scaladsl/DefaultTestContext.scala) { #init-mat }
@@ -47,7 +47,7 @@ Java
 : @@snip [snip](/sqs/src/test/java/akka/stream/alpakka/sqs/javadsl/BaseSqsTest.java) { #init-mat }
 
 
-This connector requires an implicit @javadoc[SqsAsyncClient](software.amazon.awssdk.services.sqs.SqsAsyncClient) instance to communicate with AWS SQS.
+This connector requires an @scala[implicit] @javadoc[SqsAsyncClient](software.amazon.awssdk.services.sqs.SqsAsyncClient) instance to communicate with AWS SQS.
 
 It is your code's responsibility to call `close` to free any resources held by the client. In this example it will be called when the actor system is terminated.
 
@@ -140,12 +140,12 @@ Java
 ### Group messages and publish batches to an SQS queue
 
 Create a sink, that forwards `String` to the SQS queue. However, the main difference from the previous use case, 
-it batches items and sends as a one request and forwards a @apidoc[SqsPublishResultEntry]
+it batches items and sends as one request and forwards a @apidoc[SqsPublishResultEntry]
 further down the stream for each item processed.
 
-Note: There is also another option to send batch of messages to SQS which is using `AmazonSQSBufferedAsyncClient`.
+Note: There is also another option to send a batch of messages to SQS which is using `AmazonSQSBufferedAsyncClient`.
 This client buffers `SendMessageRequest`s under the hood and sends them as a batch instead of sending them one by one. However, beware that `AmazonSQSBufferedAsyncClient`
-does not support FIFO Queues. See [documentation for client-side buffering.](http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-client-side-buffering-request-batching.html)
+does not support FIFO Queues. See [documentation for client-side buffering.](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-client-side-buffering-request-batching.html)
 
 Scala
 : @@snip [snip](/sqs/src/test/scala/docs/scaladsl/SqsPublishSpec.scala) { #group }
@@ -221,7 +221,7 @@ For every message you may decide which action to take and push it together with 
  - `Delete` - delete message from the queue
  - `Ignore` - don't change that message, and let it reappear in the queue after the visibility timeout
  - `ChangeMessageVisibility(visibilityTimeout)` - can be used to postpone a message, or make
- the message immediately visible to other consumers. See [official documentation](http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html)
+ the message immediately visible to other consumers. See [official documentation](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html)
 for more details.
 
 

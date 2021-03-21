@@ -94,11 +94,15 @@ abstract class MqttFlowStageLogic[I](in: Inlet[I],
   protected def handleDeliveryComplete(token: IMqttDeliveryToken): Unit = ()
 
   private val onSubscribe: AsyncCallback[Try[IMqttToken]] = getAsyncCallback[Try[IMqttToken]] { conn =>
-    subscriptionPromise.complete(conn.map(_ => {
-      log.debug("subscription established")
-      Done
-    }))
-    pull(in)
+    if (subscriptionPromise.isCompleted) {
+      log.debug("subscription re-established")
+    } else {
+      subscriptionPromise.complete(conn.map(_ => {
+        log.debug("subscription established")
+        Done
+      }))
+      pull(in)
+    }
   }
 
   private val onConnect: AsyncCallback[IMqttAsyncClient] =
@@ -239,9 +243,9 @@ abstract class MqttFlowStageLogic[I](in: Inlet[I],
       if (unackedMessages.get() == 0 && isClosed(in)) completeStage()
     }
 
-  override def onDownstreamFinish(): Unit = {
+  override def onDownstreamFinish(cause: Throwable): Unit = {
     setKeepGoing(true)
-    if (unackedMessages.get() == 0) super.onDownstreamFinish()
+    if (unackedMessages.get() == 0) super.onDownstreamFinish(cause)
   }
 
   setHandlers(in, out, this)

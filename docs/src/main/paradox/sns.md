@@ -2,7 +2,7 @@
 
 The AWS SNS connector provides an Akka Stream Flow and Sink for push notifications through AWS SNS.
 
-For more information about AWS SNS please visit the [official documentation](https://aws.amazon.com/documentation/sns/).
+For more information about AWS SNS please visit the [official documentation](https://docs.aws.amazon.com/sns/index.html).
 
 @@project-info{ projectId="sns" }
 
@@ -31,7 +31,7 @@ The table below shows direct dependencies of this module and the second tab show
 
 ## Setup
 
-This connector requires an implicit @javadoc[SnsAsyncClient](software.amazon.awssdk.services.sns.SnsAsyncClient) instance to communicate with AWS SQS.
+This connector requires an @scala[implicit] @javadoc[SnsAsyncClient](software.amazon.awssdk.services.sns.SnsAsyncClient) instance to communicate with AWS SQS.
 
 It is your code's responsibility to call `close` to free any resources held by the client. In this example it will be called when the actor system is terminated.
 
@@ -43,7 +43,7 @@ Java
 
 The example above uses @extref:[Akka HTTP](akka-http:) as the default HTTP client implementation. For more details about the HTTP client, configuring request retrying and best practices for credentials, see @ref[AWS client configuration](aws-shared-configuration.md) for more details.
 
-We will also need an @apidoc[akka.actor.ActorSystem] and an @apidoc[akka.stream.Materializer].
+We will also need an @apidoc[akka.actor.ActorSystem].
 
 Scala
 : @@snip [snip](/sns/src/test/scala/akka/stream/alpakka/sns/IntegrationTestContext.scala) { #init-system }
@@ -68,7 +68,7 @@ Java
 
 As you can see, this would publish the messages from the source to the specified AWS SNS topic.
 After a message has been successfully published, a
-[PublishResult](http://docs.aws.amazon.com/AWSJavaSDK/latest/javadoc/com/amazonaws/services/sns/model/PublishResult.html)
+@javadoc[PublishResult](software.amazon.awssdk.services.sns.model.PublishRequest)
 will be pushed downstream.
 
 ### Using a Sink

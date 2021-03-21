@@ -4,26 +4,26 @@
 
 package docs.scaladsl
 
-import java.io.IOException
-import java.nio.file.{Files, Paths}
-import java.util.concurrent.TimeUnit
-
 import akka.Done
 import akka.actor.ActorSystem
 import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 import akka.stream.alpakka.unixdomainsocket.UnixSocketAddress
-import akka.stream.{ActorMaterializer, OverflowStrategy}
 import akka.stream.alpakka.unixdomainsocket.scaladsl.UnixDomainSocket
-import akka.stream.scaladsl.{Flow, Sink, Source}
+import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
+import akka.stream.{Materializer, OverflowStrategy}
 import akka.testkit._
 import akka.util.ByteString
 import org.scalatest._
 import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
-
-import scala.concurrent.{ExecutionContext, Future, Promise}
-import scala.concurrent.duration._
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
+
+import java.io.IOException
+import java.nio.file.{Files, Paths}
+import java.util.concurrent.TimeUnit
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext, Future, Promise}
+import scala.util.{Failure, Success}
 
 class UnixDomainSocketSpec
     extends TestKit(ActorSystem("UnixDomainSocketSpec"))
@@ -37,7 +37,7 @@ class UnixDomainSocketSpec
   override def afterAll: Unit =
     TestKit.shutdownActorSystem(system)
 
-  implicit val ma: ActorMaterializer = ActorMaterializer()
+  implicit val ma: Materializer = Materializer(system)
   implicit val ec: ExecutionContext = system.dispatcher
 
   private val dir = Files.createTempDirectory("UnixDomainSocketSpec")
@@ -161,17 +161,32 @@ class UnixDomainSocketSpec
       val binding =
         UnixDomainSocket().bindAndHandle(Flow.fromFunction(identity), Paths.get("/nonexistentdir/socket"))
 
-      binding.failed.futureValue shouldBe an[IOException]
+      val bindingFailure = binding.failed.futureValue
+      bindingFailure shouldBe an[IOException]
+      bindingFailure.getMessage should startWith("No such file or directory")
     }
 
     "not be able to connect to a non-existent file" in {
-      val connection =
+      val (binding, result) =
         Source
           .single(ByteString("hi"))
-          .via(UnixDomainSocket().outgoingConnection(Paths.get("/thisshouldnotexist")))
-          .runWith(Sink.head)
+          .viaMat(UnixDomainSocket().outgoingConnection(Paths.get("/thisshouldnotexist")))(Keep.right)
+          .log("after")
+          .toMat(Sink.headOption)(Keep.both)
+          .run()
 
-      connection.failed.futureValue shouldBe an[IOException]
+      val bindingFailure = binding.failed.futureValue
+      bindingFailure shouldBe an[IOException]
+      bindingFailure.getMessage shouldBe "No such file or directory"
+
+      // Verbose for diagnosing https://github.com/akka/alpakka/issues/2437
+      Await.ready(result, 10.seconds)
+      result.value.get match {
+        case Success(headOption) =>
+          fail(s"Unexpected successful completion with value [$headOption]")
+        case Failure(e) =>
+          e shouldBe an[IOException]
+      }
     }
 
   }

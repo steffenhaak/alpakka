@@ -4,6 +4,13 @@
 
 version: '2'
 services:
+  amazoneventbridge:
+    image: localstack/localstack:0.10.6
+    environment:
+      - "SERVICES=events"
+      - "DEBUG=true"
+    ports:
+      - "4587:4587"
   amazonsns:
     image: pafortin/goaws
     ports:
@@ -66,6 +73,18 @@ services:
     image: deangiberson/aws-dynamodb-local
     ports:
       - "8001:8000"
+  elasticsearch6:
+    image: docker.elastic.co/elasticsearch/elasticsearch:6.8.0
+    ports:
+      - "9201:9200"
+    environment:
+      - "discovery.type=single-node"
+  elasticsearch7:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.6.0
+    ports:
+      - "9202:9200"
+    environment:
+      - "discovery.type=single-node"
   ftp:
     image: stilliard/pure-ftpd:latest
     ports:
@@ -84,7 +103,7 @@ services:
       ADDED_FLAGS: "--tls=1"
   geode:
     container_name: geode
-    image: apachegeode/geode:1.11.0
+    image: apachegeode/geode:1.13.0
     hostname: geode
     mem_limit: 2g
     expose:
@@ -103,10 +122,10 @@ services:
       - ./geode/scripts/:/scripts/
     command: /scripts/geode.sh
   gcloud-pubsub-emulator:
-    image: bigtruedata/gcloud-pubsub-emulator
+    image: google/cloud-sdk:311.0.0
     ports:
       - "8538:8538"
-    command: start --host-port=0.0.0.0:8538 --data-dir=/data
+    command: gcloud beta emulators pubsub start --project=alpakka --host-port=0.0.0.0:8538
   gcloud-pubsub-emulator_prep:
     image: martynas/gcloud-pubsub-client
     links:
@@ -178,12 +197,13 @@ services:
     links:
       - kudu-master
   minio:
-    image: minio/minio
+    image: minio/minio:RELEASE.2020-03-09T18-26-53Z
     ports:
       - "9000:9000"
     environment:
       - "MINIO_ACCESS_KEY=TESTKEY"
       - "MINIO_SECRET_KEY=TESTSECRET"
+      - "MINIO_DOMAIN=s3minio.alpakka"
     command: server /data
   minio_prep:
     image: mesosphere/aws-cli
@@ -203,7 +223,7 @@ services:
     ports:
       - "27017:27017"
   influxdb:
-    image: influxdb
+    image: influxdb:1.8-alpine
     ports:
       - "8086:8086"
   mqtt:
@@ -213,7 +233,7 @@ services:
     volumes:
       - ./mqtt/src/test/travis:/mqtt/config/conf.d
   orientdb:
-    image: orientdb:3.0.13
+    image: orientdb:3.1.9
     ports:
       - "2424:2424"
     environment:
@@ -237,3 +257,9 @@ services:
       - ./ftp/src/test/resources/squid.conf:/etc/squid/squid.conf
     ports:
       - "3128:3128"
+  pravega:
+    image: pravega/pravega:0.9.0
+    ports:
+      - 9090:9090
+      - 12345:12345
+    command: standalone
