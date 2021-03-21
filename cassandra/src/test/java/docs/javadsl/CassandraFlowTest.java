@@ -7,11 +7,12 @@ package docs.javadsl;
 import akka.Done;
 // #prepared
 import akka.NotUsed;
+import akka.actor.ActorSystem;
 import akka.japi.Function2;
 import akka.japi.Pair;
-import akka.stream.Materializer;
 import akka.stream.alpakka.cassandra.CassandraWriteSettings;
 import akka.stream.alpakka.cassandra.javadsl.CassandraFlow;
+import akka.stream.alpakka.testkit.javadsl.LogCapturingJunit4;
 import akka.stream.javadsl.SourceWithContext;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
@@ -23,6 +24,7 @@ import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -41,6 +43,8 @@ public class CassandraFlowTest {
 
   static CassandraTestHelper helper;
 
+  @Rule public final LogCapturingJunit4 logCapturing = new LogCapturingJunit4();
+
   @BeforeClass
   public static void beforeAll() {
     helper = new CassandraTestHelper(TEST_NAME);
@@ -51,7 +55,7 @@ public class CassandraFlowTest {
     helper.shutdown();
   }
 
-  Materializer materializer = helper.materializer;
+  ActorSystem system = helper.system;
   CassandraSession cassandraSession = helper.cassandraSession;
   CassandraAccess cassandraAccess = helper.cassandraAccess;
 
@@ -74,14 +78,14 @@ public class CassandraFlowTest {
                     CassandraWriteSettings.defaults(),
                     "INSERT INTO " + table + "(id) VALUES (?)",
                     (element, preparedStatement) -> preparedStatement.bind(element)))
-            .runWith(Sink.ignore(), helper.materializer);
+            .runWith(Sink.ignore(), system);
 
     assertThat(await(written), is(Done.done()));
 
     CompletionStage<List<Integer>> select =
         CassandraSource.create(cassandraSession, "SELECT * FROM " + table)
             .map(row -> row.getInt("id"))
-            .runWith(Sink.seq(), helper.materializer);
+            .runWith(Sink.seq(), system);
     List<Integer> rows = await(select);
     assertThat(new ArrayList<>(rows), hasItems(data.toArray()));
   }
@@ -118,7 +122,7 @@ public class CassandraFlowTest {
                     CassandraWriteSettings.defaults(),
                     "INSERT INTO " + table + "(id, name, city) VALUES (?, ?, ?)",
                     statementBinder))
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), system);
     // #prepared
 
     assertThat(await(written).size(), is(persons.size()));
@@ -126,7 +130,7 @@ public class CassandraFlowTest {
     CompletionStage<List<Person>> select =
         CassandraSource.create(cassandraSession, "SELECT * FROM " + table)
             .map(row -> new Person(row.getInt("id"), row.getString("name"), row.getString("city")))
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), system);
     List<Person> rows = await(select);
     assertThat(new ArrayList<>(rows), hasItems(persons.toArray()));
   }
@@ -165,7 +169,7 @@ public class CassandraFlowTest {
                         preparedStatement.bind(person.id, person.name, person.city)))
             .asSource()
             .mapAsync(1, pair -> pair.second().ack())
-            .runWith(Sink.ignore(), materializer);
+            .runWith(Sink.ignore(), system);
     // #withContext
 
     assertThat(await(written), is(Done.done()));
@@ -173,7 +177,7 @@ public class CassandraFlowTest {
     CompletionStage<List<Person>> select =
         CassandraSource.create(cassandraSession, "SELECT * FROM " + table)
             .map(row -> new Person(row.getInt("id"), row.getString("name"), row.getString("city")))
-            .runWith(Sink.seq(), materializer);
+            .runWith(Sink.seq(), system);
     List<Person> rows = await(select);
     assertThat(new ArrayList<>(rows), hasItems(persons.stream().map(p -> p.first()).toArray()));
   }

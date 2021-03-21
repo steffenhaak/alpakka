@@ -24,15 +24,16 @@ object Common extends AutoPlugin {
     organizationName := "Lightbend Inc.",
     organizationHomepage := Some(url("https://www.lightbend.com/")),
     homepage := Some(url("https://doc.akka.io/docs/alpakka/current")),
-    apiURL := Some(url(s"https://doc.akka.io/api/alpakka/${version.value}")),
     scmInfo := Some(ScmInfo(url("https://github.com/akka/alpakka"), "git@github.com:akka/alpakka.git")),
     developers += Developer("contributors",
                             "Contributors",
                             "https://gitter.im/akka/dev",
                             url("https://github.com/akka/alpakka/graphs/contributors")),
-    licenses := Seq(("Apache-2.0", url("http://www.apache.org/licenses/LICENSE-2.0"))),
+    licenses := Seq(("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0"))),
     description := "Alpakka is a Reactive Enterprise Integration library for Java and Scala, based on Reactive Streams and Akka.",
-    fatalWarnings := true,
+    // TODO https://github.com/akka/alpakka/issues/2456
+    // fatalWarnings := true,
+    fatalWarnings := false,
     mimaReportSignatureProblems := true
   )
 
@@ -57,7 +58,7 @@ object Common extends AutoPlugin {
           case _ => Seq("-Xfuture", "-Yno-adapted-args")
         }),
       scalacOptions ++= (scalaVersion.value match {
-          case Dependencies.Scala212 if insideCI.value && fatalWarnings.value && !Dependencies.Nightly =>
+          case Dependencies.Scala212 if insideCI.value && fatalWarnings.value && !Dependencies.CronBuild =>
             Seq("-Xfatal-warnings")
           case _ => Seq.empty
         }),
@@ -75,30 +76,35 @@ object Common extends AutoPlugin {
           "com.google.api:com.google.cloud:com.google.iam:com.google.logging:" +
           "com.google.longrunning:com.google.protobuf:com.google.rpc:com.google.type"
         ),
-      Compile / doc / scalacOptions ++= (scalaVersion.value match {
-          case Dependencies.Scala211 =>
-            Seq(
-              "-doc-source-url", {
-                val branch = if (isSnapshot.value) "master" else s"v${version.value}"
-                s"https://github.com/akka/alpakka/tree/${branch}€{FILE_PATH}.scala#L1"
-              }
-            )
-          case _ =>
-            Seq(
-              "-doc-source-url", {
-                val branch = if (isSnapshot.value) "master" else s"v${version.value}"
-                s"https://github.com/akka/alpakka/tree/${branch}€{FILE_PATH_EXT}#L€{FILE_LINE}"
-              },
-              "-doc-canonical-base-url",
-              "https://doc.akka.io/api/alpakka/current/"
-            )
-        }),
+      Compile / doc / scalacOptions ++=
+        Seq(
+          "-doc-source-url", {
+            val branch = if (isSnapshot.value) "master" else s"v${version.value}"
+            s"https://github.com/akka/alpakka/tree/${branch}€{FILE_PATH_EXT}#L€{FILE_LINE}"
+          },
+          "-doc-canonical-base-url",
+          "https://doc.akka.io/api/alpakka/current/"
+        ),
       Compile / doc / scalacOptions -= "-Xfatal-warnings",
       compile / javacOptions ++= Seq(
-          "-Xlint:unchecked"
+          "-Xlint:cast",
+          "-Xlint:deprecation",
+          "-Xlint:dep-ann",
+          "-Xlint:empty",
+          "-Xlint:fallthrough",
+          "-Xlint:finally",
+          "-Xlint:overloads",
+          "-Xlint:overrides",
+          "-Xlint:rawtypes",
+          // JDK 11 "-Xlint:removal",
+          "-Xlint:static",
+          "-Xlint:try",
+          "-Xlint:unchecked",
+          "-Xlint:varargs"
         ),
       compile / javacOptions ++= (scalaVersion.value match {
-          case Dependencies.Scala212 if insideCI.value && fatalWarnings.value => Seq("-Werror")
+          case Dependencies.Scala212 if insideCI.value && fatalWarnings.value && !Dependencies.CronBuild =>
+            Seq("-Werror")
           case _ => Seq.empty
         }),
       autoAPIMappings := true,

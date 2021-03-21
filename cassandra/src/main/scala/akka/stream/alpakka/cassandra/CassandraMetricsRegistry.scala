@@ -4,7 +4,7 @@
 
 package akka.stream.alpakka.cassandra
 
-import akka.actor._
+import akka.actor.{ClassicActorSystemProvider, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider}
 import akka.annotation.InternalApi
 import com.codahale.metrics.MetricRegistry
 
@@ -38,6 +38,16 @@ object CassandraMetricsRegistry extends ExtensionId[CassandraMetricsRegistry] wi
   override def lookup = CassandraMetricsRegistry
   override def createExtension(system: ExtendedActorSystem) =
     new CassandraMetricsRegistry
-  override def get(system: ActorSystem): CassandraMetricsRegistry =
-    super.get(system)
+
+  /**
+   * Java API.
+   * Get the CassandraMetricsRegistry extension with the classic actors API.
+   */
+  override def get(system: akka.actor.ActorSystem): CassandraMetricsRegistry = super.apply(system)
+
+  /**
+   * Java API.
+   * Get the CassandraMetricsRegistry extension with the classic actors API.
+   */
+  override def get(system: ClassicActorSystemProvider): CassandraMetricsRegistry = super.apply(system)
 }

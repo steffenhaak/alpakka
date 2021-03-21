@@ -6,14 +6,24 @@ For more information about InfluxDB, please visit the [InfluxDB Documentation](h
 
 @@project-info{ projectId="influxdb" }
 
+@@@note { title="Official Akka Streams client" }
+
+## Influxdata, the makers of InfluxDB now offer an Akka Streams-aware client library in https://github.com/influxdata/influxdb-client-java/tree/master/client-scala 
+
+"The reference Scala client that allows query and write for the InfluxDB 2.0 by Akka Streams."
+
+@@@
+
 
 @@@warning { title="API may change" }
 
 Alpakka InfluxDB was added in Alpakka 1.1.0 in July 2019 and is marked as "API may change". Please try it out and suggest improvements.
 
-Furthermore, the major InfluxDB update to [version 2.0](https://www.influxdata.com/products/influxdb-overview/influxdb-2-0/) is expected to bring API and dependency changes to Alpakka InfluxDB.
+Furthermore, the major InfluxDB update to [version 2.0](https://www.influxdata.com/products/influxdb) is expected to bring API and dependency changes to Alpakka InfluxDB.
 
 @@@
+
+
 
 
 ## Artifacts

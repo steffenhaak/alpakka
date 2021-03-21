@@ -9,13 +9,8 @@ import java.util.concurrent.ConcurrentHashMap
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.Done
-import akka.actor.ActorSystem
-import akka.actor.ExtendedActorSystem
-import akka.actor.Extension
-import akka.actor.ExtensionId
-import akka.actor.ExtensionIdProvider
+import akka.actor.{ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider}
 import akka.annotation.InternalStableApi
 import akka.event.Logging
 import akka.stream.alpakka.cassandra.{CassandraSessionSettings, CqlSessionProvider}
@@ -32,13 +27,7 @@ object CassandraSessionRegistry extends ExtensionId[CassandraSessionRegistry] wi
   def createExtension(system: ExtendedActorSystem): CassandraSessionRegistry =
     new CassandraSessionRegistry(system)
 
-  /**
-   * Java API: get the session registry
-   */
-  override def get(system: ActorSystem): CassandraSessionRegistry =
-    super.get(system)
-
-  override def lookup(): ExtensionId[CassandraSessionRegistry] = this
+  override def lookup: ExtensionId[CassandraSessionRegistry] = this
 
   /** Hash key for `sessions`. */
   private case class SessionKey(configPath: String)

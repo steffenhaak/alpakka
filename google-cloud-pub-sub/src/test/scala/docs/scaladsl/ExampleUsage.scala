@@ -8,22 +8,21 @@ import java.time.Instant
 import java.util.Base64
 
 import akka.actor.{ActorSystem, Cancellable}
-import akka.stream.ActorMaterializer
+import akka.stream.RestartSettings
 import akka.stream.alpakka.googlecloud.pubsub._
 import akka.stream.alpakka.googlecloud.pubsub.scaladsl.GooglePubSub
-import akka.stream.scaladsl.{Flow, FlowWithContext, Sink, Source}
+import akka.stream.scaladsl.{Flow, FlowWithContext, RestartFlow, Sink, Source}
 import akka.{Done, NotUsed}
 
 import scala.collection.immutable.Seq
-import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration._
+import scala.concurrent.{Future, Promise}
 
 class ExampleUsage {
 
-  //#init-mat
+  //#init-system
   implicit val system = ActorSystem()
-  implicit val mat = ActorMaterializer()
-  //#init-mat
+  //#init-system
 
   //#init-credentials
   val privateKey =
@@ -102,6 +101,24 @@ class ExampleUsage {
     .map(AcknowledgeRequest.apply)
     .to(ackSink)
   //#subscribe
+
+  //#subscribe-source-control
+  Source
+    .tick(0.seconds, 10.seconds, Done)
+    .via(
+      RestartFlow.withBackoff(RestartSettings(1.second, 30.seconds, randomFactor = 0.2))(
+        () => GooglePubSub.subscribeFlow(subscription, config)
+      )
+    )
+    .map { message =>
+      // do something fun
+
+      message.ackId
+    }
+    .groupedWithin(1000, 1.minute)
+    .map(AcknowledgeRequest.apply)
+    .to(ackSink)
+  //#subscribe-source-control
 
   //#subscribe-auto-ack
   val subscribeMessageSoruce: Source[ReceivedMessage, NotUsed] = // ???

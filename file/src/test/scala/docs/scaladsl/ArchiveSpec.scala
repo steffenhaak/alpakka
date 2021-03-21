@@ -12,19 +12,17 @@ import akka.stream.alpakka.file.ArchiveMetadata
 import akka.stream.alpakka.file.scaladsl.Archive
 import akka.stream.alpakka.testkit.scaladsl.LogCapturing
 import akka.stream.scaladsl.{FileIO, Sink, Source}
-import akka.stream.{ActorMaterializer, IOResult, Materializer}
 import akka.testkit.TestKit
 import akka.util.ByteString
-import akka.{Done, NotUsed}
+import akka.NotUsed
 import docs.javadsl.ArchiveHelper
 import org.scalatest.BeforeAndAfterAll
-import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.concurrent.{IntegrationPatience, ScalaFutures}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
 import scala.collection.JavaConverters._
-import scala.concurrent.Future
-import scala.util.Success
+import scala.concurrent.{ExecutionContext, Future}
 
 class ArchiveSpec
     extends TestKit(ActorSystem("ArchiveSpec"))
@@ -32,14 +30,14 @@ class ArchiveSpec
     with Matchers
     with ScalaFutures
     with BeforeAndAfterAll
-    with LogCapturing {
+    with LogCapturing
+    with IntegrationPatience {
 
-  implicit val mat: Materializer = ActorMaterializer()
+  implicit val ec: ExecutionContext = system.dispatcher
 
   private val archiveHelper = new ArchiveHelper()
 
   "archive" when {
-
     "zip flow is called" should {
       "pass empty stream" in {
         val sources = Source.empty
@@ -60,14 +58,14 @@ class ArchiveSpec
         val fileStream2: Source[ByteString, Any] = FileIO.fromPath(filePath2)
 
         /*
-         // #sample
-         val fileStream1: Source[ByteString,  Any] = ...
-         val fileStream2: Source[ByteString,  Any] = ...
+        // #sample-zip
+        val fileStream1: Source[ByteString,  Any] = ...
+        val fileStream2: Source[ByteString,  Any] = ...
 
-         // #sample
+        // #sample-zip
          */
 
-        // #sample
+        // #sample-zip
         val filesStream = Source(
           List(
             (ArchiveMetadata("akka_full_color.svg"), fileStream1),
@@ -78,8 +76,8 @@ class ArchiveSpec
         val result = filesStream
           .via(Archive.zip())
           .runWith(FileIO.toPath(Paths.get("result.zip")))
-        // #sample
-        result.futureValue shouldBe IOResult(1178, Success(Done))
+        // #sample-zip
+        result.futureValue.count shouldBe 1178
 
         val resultFileContent =
           FileIO.fromPath(Paths.get("result.zip")).runWith(Sink.fold(ByteString.empty)(_ ++ _)).futureValue
@@ -121,7 +119,7 @@ class ArchiveSpec
   private def getPathFromResources(fileName: String): Path =
     Paths.get(getClass.getClassLoader.getResource(fileName).getPath)
 
-  private def generateInputFiles(numberOfFiles: Int, lengthOfFile: Int): Map[String, Seq[Byte]] = {
+  private def generateInputFiles(numberOfFiles: Int, lengthOfFile: Int): Map[String, ByteString] = {
     val r = new scala.util.Random(31)
     (1 to numberOfFiles)
       .map(number => s"file-$number" -> ByteString.fromArray(r.nextString(lengthOfFile).getBytes))
@@ -129,11 +127,11 @@ class ArchiveSpec
   }
 
   private def filesToStream(
-      files: Map[String, Seq[Byte]]
+      files: Map[String, ByteString]
   ): Source[(ArchiveMetadata, Source[ByteString, NotUsed]), NotUsed] = {
     val sourceFiles = files.toList.map {
       case (title, content) =>
-        (ArchiveMetadata(title), Source(content.grouped(10).map(group => ByteString(group.toArray)).toList))
+        (ArchiveMetadata(title), Source(content.grouped(10).toList))
     }
     Source(sourceFiles)
   }

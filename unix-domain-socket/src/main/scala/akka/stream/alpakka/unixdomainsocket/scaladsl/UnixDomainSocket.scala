@@ -8,7 +8,7 @@ package scaladsl
 import java.nio.file.Path
 
 import akka.NotUsed
-import akka.actor.{ActorSystem, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider}
+import akka.actor.{ClassicActorSystemProvider, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider}
 import akka.stream._
 import akka.stream.alpakka.unixdomainsocket.impl.UnixDomainSocketImpl
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
@@ -19,12 +19,20 @@ import scala.concurrent.duration.Duration
 
 object UnixDomainSocket extends ExtensionId[UnixDomainSocket] with ExtensionIdProvider {
 
-  def apply()(implicit system: ActorSystem): UnixDomainSocket = super.apply(system)
+  /**
+   * Get the UnixDomainSocket extension with the classic or new actors API.
+   */
+  def apply()(implicit system: ClassicActorSystemProvider): UnixDomainSocket = super.apply(system)
+
+  /**
+   * Get the UnixDomainSocket extension with the classic actors API.
+   */
+  override def apply(system: akka.actor.ActorSystem): UnixDomainSocket = super.apply(system)
 
   override def createExtension(system: ExtendedActorSystem) =
     new UnixDomainSocket(system)
 
-  override def lookup(): ExtensionId[_ <: Extension] =
+  override def lookup: ExtensionId[_ <: Extension] =
     UnixDomainSocket
 
   /**
@@ -65,7 +73,7 @@ final class UnixDomainSocket(system: ExtendedActorSystem) extends UnixDomainSock
 
   import UnixDomainSocket._
 
-  private implicit val materializer: ActorMaterializer = ActorMaterializer()(system)
+  private implicit val materializer: Materializer = Materializer(system)
 
   /**
    * Creates a [[UnixDomainSocket.ServerBinding]] instance which represents a prospective Unix Domain Socket
