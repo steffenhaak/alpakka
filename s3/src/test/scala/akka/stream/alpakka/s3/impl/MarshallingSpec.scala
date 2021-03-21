@@ -35,7 +35,7 @@ class MarshallingSpec(_system: ActorSystem)
   override protected def afterAll(): Unit = TestKit.shutdownActorSystem(system)
 
   val xmlString = """<?xml version="1.0" encoding="UTF-8"?>
-                    |<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                    |<ListBucketResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                     |    <Name>bucket</Name>
                     |    <Prefix/>
                     |    <KeyCount>205</KeyCount>
@@ -93,7 +93,7 @@ class MarshallingSpec(_system: ActorSystem)
   }
 
   val listBucketV2TruncatedResponse = """<?xml version="1.0" encoding="UTF-8"?>
-                                        |<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                                        |<ListBucketResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                                         |    <Name>bucket</Name>
                                         |    <Prefix/>
                                         |    <KeyCount>205</KeyCount>
@@ -143,7 +143,7 @@ class MarshallingSpec(_system: ActorSystem)
   }
 
   val listBucketV1TruncatedResponse = """<?xml version="1.0" encoding="UTF-8"?>
-                                        |<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                                        |<ListBucketResult xmlns="http://s3.us-east-1.amazonaws.com/doc/2006-03-01/">
                                         |    <Name>bucket</Name>
                                         |    <Prefix/>
                                         |    <KeyCount>205</KeyCount>
@@ -206,6 +206,27 @@ class MarshallingSpec(_system: ActorSystem)
 
     result.futureValue shouldEqual CopyPartResult(Instant.parse("2009-10-28T22:32:00.000Z"),
                                                   "5b27a21a97fcf8a7004dd1d906e7a5ba")
+  }
+
+  it should "parse CompleteMultipartUpload in event-stream" in {
+    val xmlString =
+      """
+        |<CompleteMultipartUploadResult>
+        |   <Location>some-location</Location>
+        |   <Bucket>some-bucket</Bucket>
+        |   <Key>some/key</Key>
+        |   <ETag>"5b27a21a97fcf8a7004dd1d906e7a5ba"</ETag>
+        |</CompleteMultipartUploadResult>
+      """.stripMargin
+
+    val entity = HttpEntity(MediaTypes.`text/event-stream`, xmlString)
+
+    val result = Marshalling.completeMultipartUploadResultUnmarshaller(entity)
+
+    result.futureValue shouldEqual CompleteMultipartUploadResult("some-location",
+                                                                 "some-bucket",
+                                                                 "some/key",
+                                                                 "5b27a21a97fcf8a7004dd1d906e7a5ba")
   }
 
 }

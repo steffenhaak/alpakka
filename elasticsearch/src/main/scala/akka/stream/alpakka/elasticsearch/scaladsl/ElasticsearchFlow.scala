@@ -81,6 +81,38 @@ object ElasticsearchFlow {
       .mapConcat(identity)
 
   /**
+   * Create a flow to update Elasticsearch with
+   * [[immutable.Seq[akka.stream.alpakka.elasticsearch.WriteMessage WriteMessage]]]s containing type `T`
+   * with `passThrough` of type `C`.
+   * The result status is part of the immutable.Seq[[akka.stream.alpakka.elasticsearch.WriteResult WriteResult]]
+   * and must be checked for successful execution.
+   *
+   * This factory method requires an implicit Spray JSON writer for `T`.
+   */
+  def createBulk[T, C](indexName: String,
+                       typeName: String,
+                       settings: ElasticsearchWriteSettings = ElasticsearchWriteSettings.Default)(
+      implicit elasticsearchClient: RestClient,
+      sprayJsonWriter: JsonWriter[T]
+  ): Flow[immutable.Seq[WriteMessage[T, C]], immutable.Seq[WriteResult[T, C]], NotUsed] =
+    createBulk[T, C](indexName, typeName, settings, new SprayJsonWriter[T]()(sprayJsonWriter))
+
+  /**
+   * Create a flow to update Elasticsearch with
+   * [[immutable.Seq[akka.stream.alpakka.elasticsearch.WriteMessage WriteMessage]]]s containing type `T`
+   * with `passThrough` of type `C`.
+   * The result status is part of the immutable.Seq[[akka.stream.alpakka.elasticsearch.WriteResult WriteResult]]
+   * and must be checked for successful execution.
+   */
+  def createBulk[T, C](indexName: String,
+                       typeName: String,
+                       settings: ElasticsearchWriteSettings,
+                       writer: MessageWriter[T])(
+      implicit elasticsearchClient: RestClient
+  ): Flow[immutable.Seq[WriteMessage[T, C]], immutable.Seq[WriteResult[T, C]], NotUsed] =
+    stageFlow(indexName, typeName, settings, elasticsearchClient, writer)
+
+  /**
    * Create a flow to update Elasticsearch with [[akka.stream.alpakka.elasticsearch.WriteMessage WriteMessage]]s containing type `T`
    * with `context` of type `C`.
    * The result status is part of the [[akka.stream.alpakka.elasticsearch.WriteResult WriteResult]] and must be checked for
@@ -191,6 +223,7 @@ object ElasticsearchFlow {
                                    settings: ElasticsearchWriteSettings,
                                    elasticsearchClient: RestClient,
                                    writer: MessageWriter[T]) = {
+    checkClient(elasticsearchClient)
     Flow.fromGraph {
       new impl.ElasticsearchSimpleFlowStage[T, C](indexName, typeName, elasticsearchClient, settings, writer)
     }
@@ -199,5 +232,9 @@ object ElasticsearchFlow {
   private final class SprayJsonWriter[T](implicit writer: JsonWriter[T]) extends MessageWriter[T] {
     override def convert(message: T): String = message.toJson.toString()
   }
+
+  @InternalApi
+  private[scaladsl] def checkClient(client: RestClient): Unit =
+    require(client != null, "The elasticsearch `RestClient` passed in may not be null.")
 
 }

@@ -8,6 +8,7 @@ import java.util.{Objects, Optional}
 
 import akka.http.scaladsl.model.{DateTime, HttpHeader, IllegalUriException, Uri}
 import akka.http.scaladsl.model.headers._
+import akka.stream.alpakka.s3.AccessStyle.PathAccessStyle
 
 import scala.collection.immutable.Seq
 import scala.collection.immutable
@@ -382,7 +383,7 @@ final class ObjectMetadata private (
    * Amazon S3.
    * </p>
    * <p>
-   * For more information on the Content-Length HTTP header, see [[http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.13]]
+   * For more information on the Content-Length HTTP header, see [[https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.13]]
    * </p>
    *
    * @return The Content-Length HTTP header indicating the size of the
@@ -413,7 +414,7 @@ final class ObjectMetadata private (
    * </p>
    * <p>
    * For more information on the Content-Length HTTP header, see
-   * [[http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.13]]
+   * [[https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.13]]
    * </p>
    *
    * @return The Content-Length HTTP header indicating the size of the
@@ -439,7 +440,7 @@ final class ObjectMetadata private (
    * </p>
    * <p>
    * For more information on the Content-Type header, see
-   * [[http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.17]]
+   * [[https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.17]]
    * </p>
    *
    * @return The HTTP Content-Type header, indicating the type of content
@@ -468,7 +469,7 @@ final class ObjectMetadata private (
    * </p>
    * <p>
    * For more information on the Content-Type header, see
-   * [[http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.17]]
+   * [[https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.17]]
    * </p>
    *
    * @return The HTTP Content-Type header, indicating the type of content
@@ -580,7 +581,7 @@ object BucketAndKey {
   }
 
   private[s3] def validateBucketName(bucket: String, conf: S3Settings): Unit = {
-    if (conf.pathStyleAccess) {
+    if (conf.accessStyle == PathAccessStyle) {
       if (!pathStyleValid(bucket)) {
         throw IllegalUriException(
           "The bucket name contains sub-dir selection with `..`",
