@@ -4,8 +4,6 @@
 
 package akka.stream.alpakka.googlecloud.storage.impl
 
-import java.util.Base64
-
 import akka.{Done, NotUsed}
 import akka.actor.ActorSystem
 import akka.annotation.InternalApi
@@ -29,9 +27,6 @@ import scala.util.control.NonFatal
 
 @InternalApi private[storage] object GCStorageStream {
   private val parallelism = 1
-  private val sha256md = java.security.MessageDigest.getInstance("SHA-256")
-  private val base64Encoder = Base64.getEncoder()
-  private val base64Decoder = Base64.getDecoder()
 
   def getBucketSource(bucketName: String): Source[Option[Bucket], NotUsed] =
     Source
@@ -198,7 +193,7 @@ import scala.util.control.NonFatal
                 objectName: String,
                 data: Source[ByteString, _],
                 contentType: ContentType,
-                customerEncryptionKey: Option[String] = None,
+                customHeaders: Seq[HttpHeader] = Seq.empty,
                 predefinedAcl: Option[String] = None): Source[StorageObject, NotUsed] =
     Source
       .setup { (mat, attr) =>
@@ -207,7 +202,7 @@ import scala.util.control.NonFatal
         val queryParams = Map("uploadType" -> "media", "name" -> objectName) ++ predefinedAcl.map(
             "predefinedAcl" -> _.toString
           )
-        val headers = customerEncryptionKeyHeaders(customerEncryptionKey)
+
         makeRequestSource(
           createPostSourceRequestSource(
             contentType,
@@ -216,7 +211,7 @@ import scala.util.control.NonFatal
               Uri(settings.baseUrl)
                 .withPath(Path("/upload" + settings.basePath) ++ getBucketPath(bucket) / "o")
                 .withQuery(Query(queryParams)),
-            headers = headers
+            headers = customHeaders
           )
         ).mapAsync(parallelism)(response => processPutStorageObjectResponse(response, mat))
 
@@ -226,20 +221,19 @@ import scala.util.control.NonFatal
   def download(bucket: String,
                objectName: String,
                generation: Option[Long] = None,
-               customerEncryptionKey: Option[String] = None): Source[Option[Source[ByteString, NotUsed]], NotUsed] =
+               customHeaders: Seq[HttpHeader] = Seq.empty): Source[Option[Source[ByteString, NotUsed]], NotUsed] =
     Source
       .setup { (mat, attr) =>
         implicit val materializer = mat
         implicit val attributes = attr
         val queryParams = Map("alt" -> "media") ++ generation.map("generation" -> _.toString)
-        val headers = customerEncryptionKeyHeaders(customerEncryptionKey)
         makeRequestSource(
           createRequestSource(
             uriFactory = (settings: GCStorageSettings) =>
               Uri(settings.baseUrl)
                 .withPath(Path(settings.basePath) ++ getObjectPath(bucket, objectName))
                 .withQuery(Query(queryParams)),
-            headers = headers
+            headers = customHeaders
           )
         ).mapAsync(parallelism)(entityForSuccessOption)
           .map {
@@ -675,21 +669,4 @@ import scala.util.control.NonFatal
         val configPath = attr.get[GCStorageSettingsPath](GCStorageSettingsPath.Default).path
         GCStorageExt(sys).settings(configPath)
       }
-
-  private def customerEncryptionKeyHeaders(customerEncryptionKey: Option[String]) = {
-    customerEncryptionKey
-      .map(
-        customerEncryptionKey =>
-          Seq(
-            `X-Goog-Encryption-Algorithm`("AES256"),
-            `X-Goog-Encryption-Key`(customerEncryptionKey),
-            `X-Goog-Encryption-Key-Sha256`(getSha256(base64Decoder.decode(customerEncryptionKey)))
-          )
-      )
-      .getOrElse(Nil)
-  }
-
-  private def getSha256(input: Array[Byte]): String = {
-    base64Encoder.encodeToString(sha256md.digest(input))
-  }
 }

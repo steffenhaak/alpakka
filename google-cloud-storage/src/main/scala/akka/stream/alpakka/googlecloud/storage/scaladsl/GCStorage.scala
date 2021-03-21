@@ -4,7 +4,7 @@
 
 package akka.stream.alpakka.googlecloud.storage.scaladsl
 
-import akka.http.scaladsl.model.ContentType
+import akka.http.scaladsl.model.{ContentType, HttpHeader}
 import akka.stream.{Attributes, Materializer}
 import akka.stream.alpakka.googlecloud.storage.impl.GCStorageStream
 import akka.stream.alpakka.googlecloud.storage.{Bucket, StorageObject}
@@ -176,8 +176,8 @@ object GCStorage {
    */
   def download(bucket: String,
                objectName: String,
-               customerEncryptionKey: Option[String]): Source[Option[Source[ByteString, NotUsed]], NotUsed] =
-    GCStorageStream.download(bucket, objectName, customerEncryptionKey = customerEncryptionKey)
+               customHeaders: Seq[HttpHeader]): Source[Option[Source[ByteString, NotUsed]], NotUsed] =
+    GCStorageStream.download(bucket, objectName, generation = None, customHeaders = customHeaders)
 
   /**
    * Downloads object from bucket.
@@ -193,8 +193,8 @@ object GCStorage {
   def download(bucket: String,
                objectName: String,
                generation: Option[Long],
-               customerEncryptionKey: Option[String]): Source[Option[Source[ByteString, NotUsed]], NotUsed] =
-    GCStorageStream.download(bucket, objectName, generation, customerEncryptionKey = customerEncryptionKey)
+               customHeaders: Seq[HttpHeader] = Seq.empty): Source[Option[Source[ByteString, NotUsed]], NotUsed] =
+    GCStorageStream.download(bucket, objectName, generation, customHeaders = customHeaders)
 
   /**
    * Uploads object, use this for small files and `resumableUpload` for big ones
@@ -211,9 +211,14 @@ object GCStorage {
                    objectName: String,
                    data: Source[ByteString, _],
                    contentType: ContentType,
-                   customerEncryptionKey: Option[String] = None,
+                   customHeaders: Seq[HttpHeader] = Seq.empty,
                    predefinedAcl: Option[String] = None): Source[StorageObject, NotUsed] =
-    GCStorageStream.putObject(bucket, objectName, data, contentType, customerEncryptionKey, predefinedAcl)
+    GCStorageStream.putObject(bucket,
+                              objectName,
+                              data,
+                              contentType,
+                              customHeaders = customHeaders,
+                              predefinedAcl = predefinedAcl)
 
   /**
    * Uploads object by making multiple requests
